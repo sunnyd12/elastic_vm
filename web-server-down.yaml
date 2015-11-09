@@ -1,0 +1,122 @@
+heat_template_version: 2014-10-16  
+
+parameters:
+  key_name:
+    type: string
+    default: kp1
+  node_name:
+    type: string
+    default: lb-vm
+  node_server_flavor:
+    type: string
+    default: m1.test2
+  node_image_name:
+    type: string
+    default: Ubuntu1404
+  floating_net_id:
+    type: string
+  private_net_id:
+    type: string
+  private_subnet_id:
+    type: string
+  pool_id:
+    type: string
+
+resources:
+
+  vm_sg:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: vm_sg
+      description: Ping,TCP
+      rules:
+      - protocol: icmp
+      - protocol: tcp      
+        port_range_min: 0
+        port_range_max: 65535
+      
+
+  vm_port:
+    type: OS::Neutron::Port
+    properties:
+      security_groups:
+        - {get_resource: vm_sg}
+      network_id: { get_param: private_net_id }
+      fixed_ips:
+        - subnet_id: { get_param: private_subnet_id }
+
+  vm_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id: { get_param: floating_net_id }
+      port_id: { get_resource: vm_port }
+
+  vm_instance:
+    type: OS::Nova::Server
+    properties:
+      key_name: { get_param: key_name }
+      #name: { get_param: node_name }
+      image: { get_param: node_image_name }
+      flavor: { get_param: node_server_flavor }
+      networks:
+        - port: { get_resource: vm_port }
+      user_data_format: RAW
+      user_data: |
+        #!/bin/bash
+        sudo apt-get update -y
+        sudo apt-get install nginx -y
+        sudo apt-get install php5-fpm -y
+        sed -i '54,55 s/# *//' /etc/nginx/sites-available/default
+        sed -i '61,64 s/# *//' /etc/nginx/sites-available/default
+        cd /usr/share/nginx/html
+        sudo wget https://archive.org/download/BigBuckBunny_442/film0001.ogv
+        sudo wget http://www.sample-videos.com/video/mp4/480/big_buck_bunny_480p_50mb.mp4
+        sudo cat > player.html <<EOF
+        <!DOCTYPE html>
+        <html>
+        <body>
+        <video controls loop width="800" height="600" autoplay>
+            <source src="/film0001.ogv" type="video/ogg"/>
+            Your browser does not support the video tag.
+        </video>
+        </body>
+        </html>
+        EOF
+        sudo cat > player2.html <<EOF
+        <!DOCTYPE html>
+        <html>
+        <body>
+        <video controls loop width="800" height="600" autoplay>
+            <source src="/big_buck_bunny_480p_50mb.mp4" type="video/mp4"/>
+            Your browser does not support the video tag.
+        </video>
+        </body>
+        </html>
+        EOF
+        sudo touch serverinfo.php 
+        echo "<?php" >> serverinfo.php
+        echo "  \$data = shell_exec('uptime');" >> serverinfo.php
+        echo "  \$uptime = explode(' up ', \$data);" >> serverinfo.php
+        echo "  \$uptime = explode(',', \$uptime[1]);" >> serverinfo.php
+        echo "  \$uptime = \$uptime[0].', '.\$uptime[1];" >> serverinfo.php
+        echo "  \$ip = \$_SERVER['SERVER_ADDR'];" >> serverinfo.php
+        echo "  \$timestamp = shell_exec('date');" >> serverinfo.php
+        echo "  echo ('Server uptime: '.\$uptime.'');" >> serverinfo.php
+        echo "  echo '<br>Your IP address : ' . \$ip;" >> serverinfo.php
+        echo "  echo '<br>Time : ' . \$timestamp;" >> serverinfo.php
+        echo "?>" >> serverinfo.php
+        sudo chmod 777 serverinfo.php
+        sudo service php5-fpm restart
+        sudo service nginx restart
+#        cd /home/
+#        wget http://www.sample-videos.com/video/mp4/720/big_buck_bunny_720p_50mb.mp4
+#        sudo python -m SimpleHTTPServer 80 
+
+  member:
+    type: OS::Neutron::PoolMember
+    properties:
+      pool_id: {get_param: pool_id}
+      address: {get_attr: [vm_instance, first_address]}
+      protocol_port: 80
+
+

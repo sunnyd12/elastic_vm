@@ -1,0 +1,41 @@
+heat_template_version: 2014-10-16
+parameters:
+  key_name:
+    type: string
+    default: kp1
+  node_name:
+    type: string
+    default: lb-vm
+  node_server_flavor:
+    type: string
+    default: m1.test2
+  node_image_name:
+    type: string
+    default: Ubuntu1404
+  floating_net_id:
+    type: string
+  private_net_id:
+    type: string
+  private_subnet_id:
+    type: string
+  pool_id:
+    type: string
+  capacity_count:
+    type: number
+    default: 1
+
+resources:
+  web_scaler:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: {get_param: capacity_count}
+      resource_def:
+        type: OS::Nova::Server::Scaled
+        properties:
+          node_server_flavor: {get_param: node_server_flavor}
+          node_image_name: {get_param: node_image_name}
+          key_name: {get_param: key_name}
+          floating_net_id: {get_param: floating_net_id}
+          private_net_id: {get_param: private_net_id}
+          private_subnet_id: {get_param: private_subnet_id}
+          pool_id: {get_param: pool_id}
